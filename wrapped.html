@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ChatGPT Cinematic Wrapped - Enhanced</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap");
+
+    :root {
+      --bg: #000000;
+      --text: #ffffff;
+      --muted: #9aa0a6;
+      --accent: #00f2ea;
+      --accent-2: #ff0050;
+      --card: rgba(255,255,255,0.04);
+    }
+
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family:"Inter",sans-serif;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      height:100vh;
+      overflow-y:scroll;
+      scroll-snap-type:y mandatory;
+    }
+    body::-webkit-scrollbar{display:none}
+
+    /* fixed toolbar for year selector + tour */
+    .top-toolbar{
+      position:fixed;
+      top:12px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:1000;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:8px 14px;
+      border-radius:999px;
+      background:rgba(0,0,0,0.6);
+      backdrop-filter:blur(8px);
+      box-shadow:0 8px 26px rgba(0,0,0,0.6);
+      font-size:0.9rem;
+    }
+    .toolbar-label{color:var(--muted);font-weight:600}
+
+    .select-wrap{position:relative}
+    .year-select{
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      color:var(--text);
+      border:1px solid rgba(255,255,255,0.12);
+      padding:8px 38px 8px 10px;
+      border-radius:12px;
+      font-weight:600;
+      -webkit-appearance:none;
+      appearance:none;
+      outline:none;
+      cursor:pointer;
+      min-width:150px;
+    }
+    /* custom arrow using pseudo element on wrapper */
+    .select-wrap::after{
+      content:"";
+      position:absolute;
+      right:12px;
+      top:50%;
+      transform:translateY(-50%);
+      width:10px;
+      height:10px;
+      pointer-events:none;
+      background-image:linear-gradient(135deg, transparent 50%, var(--text) 50%), linear-gradient(45deg, var(--text) 50%, transparent 50%);
+      background-size:6px 6px,6px 6px;
+      background-repeat:no-repeat;
+      background-position:50% 50%,50% 50%;
+      opacity:0.85;
+    }
+    .year-select option{background:rgba(10,10,10,0.98);color:var(--text)}
+
+    .toolbar-hidden{display:none}
+
+    /* tour button + progress */
+    .tour-wrap{display:flex;align-items:center;gap:10px}
+    .tour-btn{
+      width:42px;height:42px;border-radius:50%;
+      display:inline-flex;align-items:center;justify-content:center;
+      background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.06);
+      color:var(--text);font-weight:800;font-size:18px;cursor:pointer;
+      box-shadow:0 8px 18px rgba(0,0,0,0.6);
+    }
+    .tour-btn.playing{background:linear-gradient(180deg, rgba(0,242,234,0.07), rgba(255,0,80,0.03)); color:#000}
+    .tour-progress{
+      width:120px;height:6px;background:rgba(255,255,255,0.06);border-radius:999px;overflow:hidden;
+      box-shadow:inset 0 -1px 0 rgba(0,0,0,0.6);
+    }
+    .tour-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width 0.12s linear}
+
+    /* overlay shown while recomputing */
+    .year-overlay{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:900;
+      background:rgba(0,0,0,0.55);
+      backdrop-filter:blur(6px);
+    }
+    .hidden{display:none !important}
+
+    .year-overlay-box{
+      padding:18px 22px;
+      border-radius:14px;
+      background:rgba(10,10,10,0.95);
+      border:1px solid rgba(255,255,255,0.06);
+      box-shadow:0 18px 40px rgba(0,0,0,0.6);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:12px;
+      min-width:260px;
+    }
+    .year-spinner{
+      width:40px;height:40px;border-radius:50%;
+      border:4px solid rgba(255,255,255,0.12);
+      border-top-color:var(--accent);animation:spin 1s linear infinite;
+    }
+    .year-overlay-text-main{font-weight:700;color:var(--text)}
+    .year-overlay-text-sub{color:var(--muted);font-size:0.9rem}
+    .year-progress-bar{width:100%;height:8px;border-radius:999px;background:rgba(255,255,255,0.04);overflow:hidden}
+    .year-progress-fill{width:40%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));animation:slidebar 1.25s ease-in-out infinite}
+    @keyframes slidebar{0%{transform:translateX(-100%)}50%{transform:translateX(20%)}100%{transform:translateX(120%)}}
+    @keyframes spin{100%{transform:rotate(360deg)}}
+
+    /* stage sections */
+    section{height:100vh;width:100vw;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;scroll-snap-align:start;padding:28px;position:relative;opacity:0;transform:translateY(60px);transition:opacity 0.7s ease,transform 0.7s cubic-bezier(0.2,0.8,0.2,1)}
+    section.visible{opacity:1;transform:translateY(0)}
+    section.fading{opacity:0;transform:scale(0.98);transition:opacity 0.4s,transform 0.4s}
+
+    h1{font-size:4.2rem;font-weight:900;line-height:1;letter-spacing:-1px;margin-bottom:14px}
+    h2{font-size:2.6rem;font-weight:800;margin-bottom:8px}
+    p{font-size:1.05rem;color:var(--muted);max-width:820px;line-height:1.6}
+    .glow-text{text-shadow:0 0 18px rgba(255,255,255,0.12)}
+    .accent{color:var(--accent);text-shadow:0 0 12px rgba(0,242,234,0.12)}
+    .accent-2{color:var(--accent-2);text-shadow:0 0 12px rgba(255,0,80,0.12)}
+
+    .big-number{font-size:6.2rem;font-weight:900;background:linear-gradient(to bottom,#fff,#888);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:12px 0}
+    .big-number.small{font-size:4.4rem}
+
+    .btn-upload{background:var(--text);color:#000;border:none;padding:14px 36px;border-radius:999px;font-weight:800;font-size:1rem;cursor:pointer;transition:transform .15s}
+    .btn-upload:hover{transform:scale(1.05)}
+
+    .loader{width:48px;height:48px;border-radius:50%;border:5px solid #222;border-top-color:#fff;animation:spin 1s linear infinite;display:none;margin-top:18px}
+
+    .chart-container{width:92%;max-width:980px;height:420px;position:relative;margin-top:12px}
+    .mini-stats{display:flex;flex-wrap:wrap;justify-content:center;gap:18px;margin-top:20px}
+    .mini-card{background:var(--card);padding:12px 18px;border-radius:12px;min-width:180px}
+    .mini-label{font-size:0.9rem;color:var(--muted)}
+    .mini-value{font-size:1.4rem;font-weight:800;margin-top:6px}
+
+    .balance-track{width:78%;max-width:640px;height:22px;background:#222;border-radius:999px;overflow:hidden;margin:24px 0;display:flex}
+    .balance-fill{height:100%;transition:width 1s ease-out}
+    .b-user{background:var(--accent);box-shadow:0 6px 18px rgba(0,242,234,0.06)}
+    .b-ai{background:var(--accent-2);box-shadow:0 6px 18px rgba(255,0,80,0.06)}
+
+    .cloud-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;max-width:980px}
+    .cloud-item{background:rgba(255,255,255,0.04);padding:10px 18px;border-radius:18px;color:#ddd;font-size:1rem;transition:transform .12s}
+    .cloud-item:hover{transform:translateY(-6px);box-shadow:0 12px 28px rgba(0,0,0,0.6)}
+
+    .cloud-wrapper{display:flex;flex-wrap:wrap;justify-content:center;gap:28px;width:100%;max-width:1100px}
+    .cloud-column{flex:1 1 340px;display:flex;flex-direction:column;align-items:center}
+    .cloud-title{font-size:1.1rem;margin-bottom:12px;color:var(--muted)}
+
+    .tooltip{position:fixed;pointer-events:none;padding:8px 12px;border-radius:10px;background:rgba(8,8,8,0.95);color:var(--text);font-size:0.9rem;border:1px solid rgba(255,255,255,0.06);z-index:2000;transform:translate(-50%,-120%);white-space:nowrap}
+    .hidden-tooltip{display:none !important}
+
+    /* longest chats list styling */
+    .longest-list{
+      width:78%;max-width:980px;
+      max-height:360px;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding:12px;
+      margin-top:18px;
+      border-radius:12px;
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.04);
+      box-shadow:0 10px 30px rgba(0,0,0,0.6);
+    }
+    .longest-item{
+      padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.015));
+      display:flex;justify-content:space-between;align-items:center;gap:12px;
+    }
+    .longest-meta{font-size:0.9rem;color:var(--muted)}
+    .longest-title{font-weight:800;max-width:68%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    /* small utility */
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:14px;align-items:center}
+    .col{display:flex;flex-direction:column;gap:8px}
+
+    @media (max-width:768px){
+      h1{font-size:2.6rem}
+      h2{font-size:1.6rem}
+      .big-number{font-size:4.2rem}
+      .chart-container{height:300px}
+      .top-toolbar{top:8px;padding:6px 10px}
+      .year-select{min-width:120px}
+      section{padding:18px}
+      .longest-title{max-width:52%}
+      .tour-progress{display:none}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden audio - place play.mp3 next to this HTML file -->
+  <audio id="tourAudio" src="play.mp3" preload="metadata"></audio>
+
+  <!-- Year selector toolbar + Tour -->
+  <div id="toolbar" class="top-toolbar toolbar-hidden">
+    <span class="toolbar-label">View stats for</span>
+    <div class="select-wrap">
+      <select id="yearSelect" class="year-select"></select>
+    </div>
+
+    <div class="tour-wrap" style="margin-left:8px">
+      <button id="tourBtn" class="tour-btn" aria-label="Take a tour">▶</button>
+      <div class="tour-progress" title="Tour progress">
+        <div id="tourProgressFill" class="tour-progress-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Year processing overlay -->
+  <div id="yearLoading" class="year-overlay hidden" aria-hidden="true">
+    <div class="year-overlay-box">
+      <div class="year-spinner" aria-hidden="true"></div>
+      <div class="year-overlay-text-main">Updating view</div>
+      <div class="year-overlay-text-sub">Rebuilding charts and clouds</div>
+      <div class="year-progress-bar" aria-hidden="true">
+        <div class="year-progress-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="s-intro" class="visible">
+    <h1 class="glow-text">CHATGPT<br><span class="accent">WRAPPED</span></h1>
+    <br><br>
+    <p>The cinematic experience. Your year in review.</p>
+    <br><br>
+    <button class="btn-upload" onclick="document.getElementById('fileInput').click()"> UPLOAD CHAT.HTML </button>
+    <div class="loader" id="loader" role="status" aria-hidden="true"></div>
+    <input type="file" id="fileInput" accept=".html,.json" style="display:none" />
+
+    <br><br>
+    <div style="margin-bottom:20px;font-size:0.86rem;color:var(--muted)">
+      Privacy first. Data is processed locally in your browser.
+    </div>
+  </section>
+
+  <div id="content-root" class="hidden">
+
+    <section>
+      <h2>YOU STARTED</h2>
+      <div class="big-number" id="val-chats">0</div>
+      <h2>CONVERSATIONS</h2>
+      <p id="year-label">Stats for all years.</p>
+
+      <div class="mini-stats">
+        <div class="mini-card">
+          <div class="mini-label">User words</div>
+          <div class="mini-value" id="mini-user-words">0</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-label">AI words</div>
+          <div class="mini-value" id="mini-ai-words">0</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-label">Average words per chat</div>
+          <div class="mini-value" id="mini-avg-chat">0</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-label">Longest chat words</div>
+          <div class="mini-value" id="mini-longest">0</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>YOU TYPED</h2>
+      <div class="big-number accent" id="val-words">0</div>
+      <h2>WORDS</h2>
+      <p>
+        That is approximately <span id="val-pages" style="color:white">0</span> pages of text.
+        <br />
+        Active days in this view: <span id="val-days" style="color:white">0</span>
+      </p>
+    </section>
+
+    <section>
+      <h2>THE DYNAMIC</h2>
+      <p>Who talks more</p>
+
+      <div style="display:flex;justify-content:space-between;width:78%;max-width:600px;margin-top:20px;font-weight:800">
+        <span class="accent">YOU <span id="pct-user">50%</span></span>
+        <span class="accent-2">AI <span id="pct-ai">50%</span></span>
+      </div>
+
+      <div class="balance-track">
+        <div class="balance-fill b-user" id="bar-user"></div>
+        <div class="balance-fill b-ai" id="bar-ai"></div>
+      </div>
+
+      <p id="balance-msg" class="muted">Perfectly balanced, as all things should be.</p>
+    </section>
+
+    <section>
+      <h2>YOUR RHYTHM</h2>
+      <p>When are you most active</p>
+      <div class="chart-container">
+        <canvas id="chartHour"></canvas>
+      </div>
+      <p id="night-status" style="margin-top:18px;color:var(--muted)"></p>
+    </section>
+
+    <section>
+      <h2>THE TIMELINE</h2>
+      <p>Consistency throughout the year</p>
+      <div class="chart-container">
+        <canvas id="chartMonth"></canvas>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="accent-2">OBSESSIONS</h2>
+      <p style="margin-bottom:28px">Top words by you and by AI. Hover to see counts.</p>
+
+      <div class="cloud-wrapper">
+        <div class="cloud-column">
+          <div class="cloud-title accent">Your words</div>
+          <div class="cloud-grid" id="word-cloud-user"></div>
+        </div>
+        <div class="cloud-column">
+          <div class="cloud-title accent-2">AI words</div>
+          <div class="cloud-grid" id="word-cloud-ai"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW: Top days -->
+    <section>
+      <h2>TOP ACTIVE DAYS</h2>
+      <p>Days when you were most chatty</p>
+      <div class="chart-container">
+        <canvas id="chartTopDays"></canvas>
+      </div>
+      <p class="muted">Top 12 days in this view</p>
+    </section>
+
+    <!-- NEW: Message length distribution -->
+    <section>
+      <h2>MESSAGE LENGTHS</h2>
+      <p>Distribution of message length in words</p>
+      <div class="chart-container">
+        <canvas id="chartLengths"></canvas>
+      </div>
+      <p class="muted">Buckets show short and long message habits</p>
+    </section>
+
+    <!-- NEW: Response time -->
+    <section>
+      <h2>AI RESPONSE TIME</h2>
+      <p>How fast the AI replied after your messages</p>
+      <div class="chart-container">
+        <canvas id="chartResponseTime"></canvas>
+      </div>
+      <p class="muted" id="resp-time-summary">Average response time: 0s</p>
+    </section>
+
+    <!-- NEW: Top user words bar -->
+    <section>
+      <h2>TOP USER TOPICS</h2>
+      <p>Top user words in this view</p>
+      <div class="chart-container">
+        <canvas id="chartTopWords"></canvas>
+      </div>
+    </section>
+
+    <!-- NEW: Longest chats scrollable stat -->
+    <section>
+      <h2>LONGEST CHATS</h2>
+      <p>Scrollable list with chat name and date time (year included)</p>
+      <div id="longestList" class="longest-list"></div>
+    </section>
+
+    <section>
+      <div class="big-number small">FIN</div>
+      <p>See you next year</p>
+      <button class="btn-upload" style="margin-top:16px;font-size:1rem;padding:10px 28px" onclick="window.location.reload()">
+        Start Over
+      </button>
+    </section>
+
+  </div>
+
+  <div id="wcTooltip" class="tooltip hidden-tooltip" role="status" aria-hidden="true"></div>
+
+  <script>
+    /* intersection observer - reveal when near center */
+    const observerOptions = { root:null, threshold:0.7 };
+    const observer = new IntersectionObserver((entries)=>{
+      entries.forEach(entry=>{
+        if(entry.intersectionRatio >= 0.7){
+          entry.target.classList.add("visible");
+          entry.target.classList.remove("fading");
+        } else {
+          entry.target.classList.remove("visible");
+          entry.target.classList.add("fading");
+        }
+      });
+    }, observerOptions);
+
+    /* file parsing */
+    const fileInput = document.getElementById("fileInput");
+    const loader = document.getElementById("loader");
+    const yearSelect = document.getElementById("yearSelect");
+    const toolbar = document.getElementById("toolbar");
+    const yearLoading = document.getElementById("yearLoading");
+    const wcTooltip = document.getElementById("wcTooltip");
+    const longestListEl = document.getElementById("longestList");
+
+    const tourBtn = document.getElementById("tourBtn");
+    const tourAudio = document.getElementById("tourAudio");
+    const tourProgressFill = document.getElementById("tourProgressFill");
+
+    let globalData = null;
+    let chartHour = null;
+    let chartMonth = null;
+    let chartTopDays = null;
+    let chartLengths = null;
+    let chartResponseTime = null;
+    let chartTopWords = null;
+
+    let tourRaf = null;
+    let isTourRunning = false;
+    let userInteractedDuringTour = false;
+
+    fileInput.addEventListener("change", (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      loader.style.display = "block";
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        try{
+          const data = robustParse(ev.target.result);
+          if(!Array.isArray(data)) throw new Error("Invalid data");
+          globalData = data;
+          buildYearSelect(data);
+          processData();
+        } catch(err){
+          alert("Error parsing file. Ensure it is chat.html exported file or JSON.");
+          loader.style.display = "none";
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    function robustParse(html){
+      try { return JSON.parse(html); } catch(e) {}
+      const marker = "var jsonData =";
+      let start = html.indexOf(marker);
+      if(start === -1) throw new Error("No data");
+      start = html.indexOf("[", start);
+      let open = 0, inStr = false, esc = false;
+      for(let i=start;i<html.length;i++){
+        const c = html[i];
+        if(esc){ esc = false; continue; }
+        if(c === "\\") { esc = true; continue; }
+        if(c === "\"") { inStr = !inStr; continue; }
+        if(!inStr){
+          if(c === "[") open++;
+          else if(c === "]"){
+            open--;
+            if(open === 0) return JSON.parse(html.substring(start, i+1));
+          }
+        }
+      }
+      throw new Error("Parse failed");
+    }
+
+    function buildYearSelect(data){
+      const years = new Set();
+      data.forEach(c=>{
+        if(c.create_time){
+          const y = new Date(c.create_time*1000).getFullYear();
+          years.add(y);
+        }
+      });
+      const arr = Array.from(years).sort((a,b)=>b-a);
+      yearSelect.innerHTML = "";
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = "All years";
+      yearSelect.appendChild(optAll);
+      arr.forEach(y=>{
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = String(y);
+        yearSelect.appendChild(opt);
+      });
+      toolbar.classList.remove("toolbar-hidden");
+      yearSelect.addEventListener("change",()=>{ processData(); });
+      loader.style.display = "none";
+    }
+
+    /* show overlay while recomputing */
+    function processData(){
+      if(!globalData) return;
+      yearLoading.classList.remove("hidden");
+      // allow overlay to render then compute
+      requestAnimationFrame(()=>{
+        setTimeout(()=>{
+          computeAndRender();
+          // small delay to avoid flicker
+          setTimeout(()=>{ yearLoading.classList.add("hidden"); }, 180);
+        }, 60);
+      });
+    }
+
+    function computeAndRender(){
+      const yearFilter = yearSelect.value || "all";
+
+      const stats = {
+        chats:0,
+        words:0,
+        aiWords:0,
+        hours:Array(24).fill(0),
+        months:Array(12).fill(0),
+        wordsMapUser:{},
+        wordsMapAi:{},
+        longestChat:0,
+        activeDays:new Set(),
+        dayCounts:{},
+        messageLengths:[],
+        userMessageLengths:[],
+        responseTimes:[],
+      };
+
+      const STOP_WORDS = new Set([
+        "the","and","is","to","in","a","of","for","it","on","with",
+        "as","this","that","are","be","or","at","my","i","me","can",
+        "you","please","write","code","make","how","what","create",
+        "do","not","if","but","when","up","so","from","by","dont"
+      ]);
+
+      globalData.forEach(c=>{
+        if(yearFilter !== "all"){
+          if(!c.create_time) return;
+          const y = new Date(c.create_time*1000).getFullYear();
+          if(String(y) !== yearFilter) return;
+        }
+
+        stats.chats++;
+
+        if(c.create_time){
+          const dt = new Date(c.create_time*1000);
+          stats.months[dt.getMonth()]++;
+          stats.activeDays.add(dt.toDateString());
+          const dayKey = dt.toDateString();
+          stats.dayCounts[dayKey] = (stats.dayCounts[dayKey] || 0) + 1;
+        }
+
+        // build ordered messages list from mapping
+        const mapping = c.mapping || {};
+        const msgs = Object.keys(mapping).map(k=>{
+          const mm = mapping[k] && mapping[k].message ? mapping[k].message : null;
+          return mm;
+        }).filter(Boolean).map(m=>{
+          // m has author, content, create_time
+          const parts = m.content && m.content.parts ? m.content.parts.filter(p=> typeof p === "string").join(" ") : "";
+          return {
+            author: m.author && m.author.role ? m.author.role : "unknown",
+            text: parts || "",
+            time: m.create_time || 0
+          };
+        }).sort((a,b)=> (a.time||0) - (b.time||0));
+
+        let chatWords = 0;
+
+        // iterate messages in this chat
+        for(let i=0;i<msgs.length;i++){
+          const m = msgs[i];
+          if(!m || !m.text) continue;
+          const wc = m.text.split(/\s+/).filter(Boolean).length;
+          if(m.author === "user"){
+            stats.words += wc;
+            chatWords += wc;
+            if(m.time){
+              const h = new Date(m.time*1000).getHours();
+              stats.hours[h]++;
+            }
+            // message length arrays
+            stats.messageLengths.push(wc);
+            stats.userMessageLengths.push(wc);
+
+            // top words
+            m.text.toLowerCase().replace(/[^\w\s]/g,"").split(/\s+/).forEach(w=>{
+              if(w.length > 3 && !STOP_WORDS.has(w) && isNaN(w)){
+                stats.wordsMapUser[w] = (stats.wordsMapUser[w] || 0) + 1;
+              }
+            });
+
+            // compute response time to next AI reply if available
+            let j = i+1;
+            while(j < msgs.length && (!msgs[j] || !msgs[j].text)) j++;
+            if(j < msgs.length && msgs[j].author !== "user" && msgs[j].time && m.time){
+              const dtSec = Number(msgs[j].time) - Number(m.time);
+              if(dtSec >= 0) stats.responseTimes.push(dtSec);
+            }
+
+          } else {
+            stats.aiWords += wc;
+            // AI message length as well
+            stats.messageLengths.push(wc);
+            m.text.toLowerCase().replace(/[^\w\s]/g,"").split(/\s+/).forEach(w=>{
+              if(w.length > 3 && !STOP_WORDS.has(w) && isNaN(w)){
+                stats.wordsMapAi[w] = (stats.wordsMapAi[w] || 0) + 1;
+              }
+            });
+          }
+        }
+
+        if(chatWords > stats.longestChat) stats.longestChat = chatWords;
+      });
+
+      // show main UI
+      document.getElementById("s-intro").style.display = "none";
+      const root = document.getElementById("content-root");
+      root.classList.remove("hidden");
+      document.querySelectorAll("section").forEach(s=>observer.observe(s));
+
+      // year label
+      const label = document.getElementById("year-label");
+      if(yearFilter === "all"){ label.textContent = "Stats for all years."; }
+      else { label.textContent = "Stats for " + yearFilter + "."; }
+
+      // numbers
+      const avg = stats.chats ? Math.round(stats.words / stats.chats) : 0;
+      const pages = Math.max(0, Math.floor(stats.words / 300));
+      const activeDaysCount = stats.activeDays.size;
+
+      document.getElementById("val-chats").textContent = stats.chats.toLocaleString();
+      document.getElementById("val-words").textContent = stats.words.toLocaleString();
+      document.getElementById("val-pages").textContent = pages.toLocaleString();
+      document.getElementById("val-days").textContent = activeDaysCount.toLocaleString();
+
+      document.getElementById("mini-user-words").textContent = stats.words.toLocaleString();
+      document.getElementById("mini-ai-words").textContent = stats.aiWords.toLocaleString();
+      document.getElementById("mini-avg-chat").textContent = avg.toLocaleString();
+      document.getElementById("mini-longest").textContent = stats.longestChat.toLocaleString();
+
+      // balance
+      const tot = stats.words + stats.aiWords;
+      const uPct = Math.round((stats.words / (tot || 1)) * 100) || 50;
+      const aPct = 100 - uPct;
+      document.getElementById("pct-user").textContent = uPct + "%";
+      document.getElementById("pct-ai").textContent = aPct + "%";
+      document.getElementById("bar-user").style.width = uPct + "%";
+      document.getElementById("bar-ai").style.width = aPct + "%";
+      if(uPct > 60) document.getElementById("balance-msg").textContent = "You like to lead conversations.";
+      else if(aPct > 60) document.getElementById("balance-msg").textContent = "You enjoy detailed explanations.";
+      else document.getElementById("balance-msg").textContent = "Perfectly balanced, as all things should be.";
+
+      // render charts and clouds
+      renderCharts(stats);
+      renderClouds(stats.wordsMapUser, stats.wordsMapAi);
+      updateNightStatus(stats.hours);
+
+      // build and show longest chats list
+      renderLongestChatsList(yearFilter);
+
+      // show response time summary
+      const avgResp = stats.responseTimes.length ? Math.round(stats.responseTimes.reduce((a,b)=>a+b,0) / stats.responseTimes.length) : 0;
+      document.getElementById("resp-time-summary").textContent = "Average response time: " + avgResp + "s";
+    }
+
+    function renderCharts(stats){
+      Chart.defaults.color = "#bfc7cc";
+      Chart.defaults.borderColor = "#1e1e1e";
+
+      // hour chart
+      const hourCanvas = document.getElementById("chartHour");
+      const ctxHour = hourCanvas.getContext("2d");
+      if(chartHour) chartHour.destroy();
+      const gradient = ctxHour.createLinearGradient(0,0,0,hourCanvas.height);
+      gradient.addColorStop(0,"rgba(0,242,234,0.35)");
+      gradient.addColorStop(1,"rgba(0,242,234,0.03)");
+      chartHour = new Chart(ctxHour, {
+        type:"line",
+        data:{
+          labels:[...Array(24).keys()].map(x=> (x < 10 ? "0" + x : x) + ":00"),
+          datasets:[{
+            label:"Messages",
+            data:stats.hours,
+            borderColor:"#00f2ea",
+            backgroundColor:gradient,
+            fill:true,
+            tension:0.4,
+            pointRadius:3,
+            pointHoverRadius:6,
+            pointBackgroundColor:"#000",
+            borderWidth:3
+          }]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false}},
+          scales:{x:{grid:{display:false},ticks:{maxRotation:45,minRotation:45}},y:{display:false}},
+          interaction:{mode:"index",intersect:false},
+          animation:{duration:700}
+        }
+      });
+
+      // month chart
+      const monthCanvas = document.getElementById("chartMonth");
+      const ctxMonth = monthCanvas.getContext("2d");
+      if(chartMonth) chartMonth.destroy();
+      chartMonth = new Chart(ctxMonth, {
+        type:"bar",
+        data:{
+          labels:["J","F","M","A","M","J","J","A","S","O","N","D"],
+          datasets:[{label:"Chats",data:stats.months,backgroundColor:"#ff0050",borderRadius:6}]
+        },
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{display:false}},animation:{duration:700}}
+      });
+
+      // top days chart
+      const topDaysCanvas = document.getElementById("chartTopDays");
+      const ctxTopDays = topDaysCanvas.getContext("2d");
+      if(chartTopDays) chartTopDays.destroy();
+      const dayPairs = Object.entries(stats.dayCounts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+      const dayLabels = dayPairs.map(p=>p[0].replace(/\s+\d{4}/,""));
+      const dayVals = dayPairs.map(p=>p[1]);
+      chartTopDays = new Chart(ctxTopDays, {
+        type:"bar",
+        data:{labels:dayLabels,datasets:[{label:"Chats",data:dayVals,backgroundColor:"#00f2ea",borderRadius:6}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{display:false}},animation:{duration:700}}
+      });
+
+      // lengths histogram
+      const lengthsCanvas = document.getElementById("chartLengths");
+      const ctxLengths = lengthsCanvas.getContext("2d");
+      if(chartLengths) chartLengths.destroy();
+      // buckets
+      const buckets = ["0-9","10-49","50-99","100-199","200+"];
+      const counts = [0,0,0,0,0];
+      stats.messageLengths.forEach(n=>{
+        if(n <= 9) counts[0]++; else if(n <= 49) counts[1]++; else if(n <= 99) counts[2]++; else if(n <= 199) counts[3]++; else counts[4]++;
+      });
+      chartLengths = new Chart(ctxLengths, {
+        type:"bar",
+        data:{labels:buckets,datasets:[{label:"Messages",data:counts,backgroundColor:"#ffb86b",borderRadius:6}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{display:false}},animation:{duration:700}}
+      });
+
+      // response time histogram
+      const respCanvas = document.getElementById("chartResponseTime");
+      const ctxResp = respCanvas.getContext("2d");
+      if(chartResponseTime) chartResponseTime.destroy();
+      const respBuckets = ["0-2s","3-10s","11-30s","31-120s","120s+"];
+      const rcounts = [0,0,0,0,0];
+      stats.responseTimes.forEach(s=>{
+        if(s <= 2) rcounts[0]++; else if(s <= 10) rcounts[1]++; else if(s <= 30) rcounts[2]++; else if(s <= 120) rcounts[3]++; else rcounts[4]++;
+      });
+      chartResponseTime = new Chart(ctxResp, {
+        type:"bar",
+        data:{labels:respBuckets,datasets:[{label:"Responses",data:rcounts,backgroundColor:"#9f7aea",borderRadius:6}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{display:false}},animation:{duration:700}}
+      });
+
+      // top user words bar
+      const topWordsCanvas = document.getElementById("chartTopWords");
+      const ctxTopWords = topWordsCanvas.getContext("2d");
+      if(chartTopWords) chartTopWords.destroy();
+      const topUserPairs = Object.entries(stats.wordsMapUser).sort((a,b)=>b[1]-a[1]).slice(0,12);
+      const topWordsLabels = topUserPairs.map(p=>p[0]);
+      const topWordsVals = topUserPairs.map(p=>p[1]);
+      chartTopWords = new Chart(ctxTopWords, {
+        type:"bar",
+        data:{labels:topWordsLabels,datasets:[{label:"Count",data:topWordsVals,backgroundColor:"#00d4ff",borderRadius:6}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{display:false}},animation:{duration:700}}
+      });
+    }
+
+    /* night owl status */
+    function updateNightStatus(hours){
+      const total = hours.reduce((a,b)=>a+b,0) || 1;
+      let night=0,morning=0,daytime=0,evening=0;
+      for(let h=0;h<24;h++){
+        const v = hours[h];
+        if(h === 22 || h === 23 || h <= 4) night += v;
+        else if(h >= 5 && h <= 11) morning += v;
+        else if(h >= 12 && h <= 17) daytime += v;
+        else if(h >= 18 && h <= 21) evening += v;
+      }
+      const shareNight = night/total;
+      const shareMorning = morning/total;
+      const shareEvening = evening/total;
+      const shareDay = daytime/total;
+      let status = "";
+      if(shareNight >= 0.4) status = "Certified night owl. Most of your chats happen after dark.";
+      else if(shareMorning >= 0.4) status = "Early bird. You like to start the day with questions.";
+      else if(shareDay >= 0.4) status = "Daytime strategist. Most activity happens during work hours.";
+      else if(shareEvening >= 0.4) status = "Evening thinker. You like to wind down with deep chats.";
+      else status = "Balanced rhythm. Your chats are spread across the clock.";
+      document.getElementById("night-status").textContent = status;
+    }
+
+    /* word clouds */
+    function renderClouds(userMap, aiMap){
+      const boxUser = document.getElementById("word-cloud-user");
+      const boxAi = document.getElementById("word-cloud-ai");
+      boxUser.innerHTML = "";
+      boxAi.innerHTML = "";
+      buildCloudInto(userMap, boxUser);
+      buildCloudInto(aiMap, boxAi);
+    }
+    function buildCloudInto(map, container){
+      const pairs = Object.entries(map);
+      if(!pairs.length) {
+        const el = document.createElement("div");
+        el.className = "muted";
+        el.textContent = "No prominent words in this view.";
+        container.appendChild(el);
+        return;
+      }
+      const sorted = pairs.sort((a,b)=>b[1]-a[1]).slice(0,40);
+      sorted.forEach(([w,c])=>{
+        const el = document.createElement("div");
+        el.className = "cloud-item";
+        el.textContent = w;
+        const scale = 0.85 + Math.random() * 1.6;
+        el.style.fontSize = scale + "rem";
+        el.dataset.count = String(c);
+        el.addEventListener("mousemove", handleCloudHover);
+        el.addEventListener("mouseleave", hideTooltip);
+        container.appendChild(el);
+      });
+    }
+    function handleCloudHover(ev){
+      const word = ev.currentTarget.textContent;
+      const count = ev.currentTarget.dataset.count;
+      wcTooltip.textContent = word + "  " + count + " times";
+      wcTooltip.style.left = ev.clientX + "px";
+      wcTooltip.style.top = ev.clientY + "px";
+      wcTooltip.classList.remove("hidden-tooltip");
+    }
+    function hideTooltip(){
+      wcTooltip.classList.add("hidden-tooltip");
+    }
+
+    /* helper: estimate words for a chat */
+    function estimateChatWords(c){
+      const mapping = c.mapping || {};
+      const msgs = Object.keys(mapping).map(k=>{
+        const mm = mapping[k] && mapping[k].message ? mapping[k].message : null;
+        return mm;
+      }).filter(Boolean).map(m=>{
+        const parts = m.content && m.content.parts ? m.content.parts.filter(p=> typeof p === "string").join(" ") : "";
+        return { text: parts || "" };
+      });
+      let total = 0;
+      msgs.forEach(m=>{ if(m.text) total += m.text.split(/\s+/).filter(Boolean).length; });
+      return total;
+    }
+
+    /* helper: chat title / name */
+    function getChatTitle(c){
+      if(c.title && String(c.title).trim()) return String(c.title).trim();
+      // fallback: first user message preview
+      const mapping = c.mapping || {};
+      const msgs = Object.keys(mapping).map(k=>{
+        const mm = mapping[k] && mapping[k].message ? mapping[k].message : null;
+        return mm;
+      }).filter(Boolean).map(m=>{
+        const parts = m.content && m.content.parts ? m.content.parts.filter(p=> typeof p === "string").join(" ") : "";
+        return { author: m.author && m.author.role ? m.author.role : 'unknown', text: parts || '' };
+      });
+      const firstUser = msgs.find(m=>m.author === 'user' && m.text && m.text.trim());
+      const source = firstUser || msgs[0] || { text: 'Untitled' };
+      const txt = (source.text || '').trim().replace(/\s+/g,' ');
+      return txt.length > 60 ? txt.slice(0,57) + '...' : (txt || 'Untitled');
+    }
+
+    /* render the longest chats list (name + date time year) */
+    function renderLongestChatsList(yearFilter){
+      longestListEl.innerHTML = '';
+      if(!globalData || !globalData.length){
+        const e = document.createElement('div'); e.className='longest-item'; e.textContent='No chats available.'; longestListEl.appendChild(e); return;
+      }
+      const filtered = globalData.filter(c=>{
+        if(yearFilter && yearFilter !== 'all'){
+          if(!c.create_time) return false;
+          const y = new Date(c.create_time*1000).getFullYear();
+          return String(y) === String(yearFilter);
+        }
+        return true;
+      });
+
+      // map to objects with count and timestamp
+      const mapped = filtered.map(c=>{
+        return {
+          title: getChatTitle(c),
+          words: estimateChatWords(c),
+          ts: c.create_time ? Number(c.create_time)*1000 : 0,
+          raw: c
+        };
+      });
+
+      // sort by words desc, then timestamp desc
+      mapped.sort((a,b)=> {
+        if(b.words !== a.words) return b.words - a.words;
+        return b.ts - a.ts;
+      });
+
+      const top = mapped.slice(0, 50); // show up to 50
+      if(top.length === 0){
+        const e = document.createElement('div'); e.className='longest-item'; e.textContent='No chats found for this selection.'; longestListEl.appendChild(e); return;
+      }
+
+      top.forEach(item=>{
+        const d = item.ts ? new Date(item.ts) : null;
+        const dateStr = d ? d.toLocaleString() : 'Unknown date';
+        const yearStr = d ? d.getFullYear() : '';
+        const el = document.createElement('div');
+        el.className = 'longest-item';
+        el.innerHTML = `
+          <div class="col" style="align-items:flex-start;min-width:0">
+            <div class="longest-title">${escapeHtml(item.title)}</div>
+            <div class="longest-meta">${escapeHtml(dateStr)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:800">${item.words.toLocaleString()} words</div>
+            <div class="longest-meta">${yearStr}</div>
+          </div>
+        `;
+        longestListEl.appendChild(el);
+      });
+    }
+
+    /* simple escape for inserted HTML */
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]); });
+    }
+
+    // avoid leaving overlay stuck on navigation
+    window.addEventListener("beforeunload", ()=>{
+      yearLoading.classList.add("hidden");
+    });
+
+    // allow keyboard open of file input for accessibility
+    document.addEventListener("keydown", (ev)=>{
+      if(ev.key === "U" && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        document.getElementById("fileInput").click();
+      }
+    });
+
+    /* ----- TOUR: smooth audio-synced auto-scroll ----- */
+
+    function startTour(){
+      if(isTourRunning) return;
+      // ensure at least one section exists (intro + content)
+      const secs = Array.from(document.querySelectorAll("section"));
+      if(secs.length === 0){
+        alert("No sections to tour. Upload your chat export first.");
+        return;
+      }
+
+      // Ensure audio metadata loaded
+      if(!tourAudio.duration || isNaN(tourAudio.duration)){
+        // try to load and wait for metadata
+        tourAudio.load();
+        tourAudio.addEventListener('loadedmetadata', onMetadataLoadedOnce);
+        // attempt play as soon as ready via user gesture (the click that invoked this)
+        tourAudio.play().then(()=>{}).catch(()=>{ /* may not autoplay on some browsers but user clicked */ });
+      } else {
+        playAndAnimate();
+      }
+    }
+
+    function onMetadataLoadedOnce(){
+      tourAudio.removeEventListener('loadedmetadata', onMetadataLoadedOnce);
+      playAndAnimate();
+    }
+
+    function playAndAnimate(){
+      // reset flags
+      userInteractedDuringTour = false;
+
+      // if content hidden, reveal it (so tour scrolls through all sections)
+      document.getElementById("s-intro").style.display = "none";
+      document.getElementById("content-root").classList.remove("hidden");
+      document.querySelectorAll("section").forEach(s=>observer.observe(s));
+
+      // try to play audio (user clicked the button so should be allowed)
+      const playPromise = tourAudio.play();
+      if(playPromise && typeof playPromise.then === "function"){
+        playPromise.catch(()=>{ /* ignore - browser could block; user clicked though */ });
+      }
+
+      isTourRunning = true;
+      tourBtn.classList.add("playing");
+      tourBtn.textContent = "⏸";
+
+      // start RAF loop to sync scroll with audio progress
+      cancelTourRaf();
+      tourRaf = requestAnimationFrame(tourFrame);
+    }
+
+    function tourFrame(){
+      if(!isTourRunning) return;
+      const duration = tourAudio.duration || 1;
+      const t = Math.max(0, Math.min(1, (tourAudio.currentTime || 0) / duration));
+      // compute target scroll position across entire document
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const target = t * maxScroll;
+      // direct set for fluid, don't request smooth (we control frames)
+      window.scrollTo(0, target);
+
+      // update progress fill
+      tourProgressFill.style.width = Math.round(t * 1000) / 10 + "%";
+
+      // schedule next
+      tourRaf = requestAnimationFrame(tourFrame);
+    }
+
+    function pauseTour(){
+      if(!isTourRunning) return;
+      tourAudio.pause();
+      cancelTourRaf();
+      isTourRunning = false;
+      tourBtn.classList.remove("playing");
+      tourBtn.textContent = "▶";
+    }
+
+    function stopTour(){
+      pauseTour();
+      try{ tourAudio.currentTime = 0; } catch(e){}
+      tourProgressFill.style.width = "0%";
+    }
+
+    function cancelTourRaf(){
+      if(tourRaf) cancelAnimationFrame(tourRaf);
+      tourRaf = null;
+    }
+
+    // when audio ends, stop the tour and show final state
+    tourAudio.addEventListener('ended', ()=>{
+      stopTour();
+      // optional: scroll to bottom to ensure final slide is visible
+      window.scrollTo({ top: document.documentElement.scrollHeight - window.innerHeight, behavior: 'smooth' });
+    });
+
+    // toggle button
+    tourBtn.addEventListener('click', ()=>{
+      if(!isTourRunning){
+        // If audio has not loaded and metadata not available, startTour will wait
+        startTour();
+      } else {
+        pauseTour();
+      }
+    });
+
+    // if user interacts with scroll, pause the tour to avoid fighting user's input
+    let userScrollTimeout = null;
+    function handleUserScroll(){
+      userInteractedDuringTour = true;
+      if(isTourRunning){
+        pauseTour();
+      }
+      // clear timeout if further scrolls
+      if(userScrollTimeout) clearTimeout(userScrollTimeout);
+      userScrollTimeout = setTimeout(()=>{ userInteractedDuringTour = false; }, 1500);
+    }
+    window.addEventListener('wheel', handleUserScroll, { passive:true });
+    window.addEventListener('touchstart', handleUserScroll, { passive:true });
+    window.addEventListener('keydown', (e)=>{
+      const navKeys = ["ArrowUp","ArrowDown","PageUp","PageDown","Home","End"," "];
+      if(navKeys.includes(e.key)) handleUserScroll();
+    });
+
+    // If user seeks audio manually, update scroll instantly
+    tourAudio.addEventListener('timeupdate', ()=>{
+      if(!isTourRunning) return;
+      // timeupdate will be handled by RAF; leave as is
+    });
+
+    /* Clean up when navigating away */
+    window.addEventListener('visibilitychange', ()=>{
+      if(document.hidden && isTourRunning){
+        // pause to avoid playing in background unexpectedly
+        pauseTour();
+      }
+    });
+
+  </script>
+</body>
+</html>
